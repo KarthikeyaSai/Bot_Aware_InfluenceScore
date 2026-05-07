@@ -130,8 +130,10 @@ The system has two independent servers — the Python backend and the React fron
 Open a terminal in the `bot-influence-scoring/` directory and run:
 
 ```bash
-PYTHONPATH=. uvicorn api.main:app --reload --port 8000
+PYTHONPATH=. .venv/bin/uvicorn api.main:app --reload --port 8000
 ```
+
+> **Important:** Always use `.venv/bin/uvicorn` rather than a globally installed `uvicorn`. The project dependencies (`torch`, `torch-geometric`, etc.) are installed inside `.venv/`, and the system Python won't find them. If you activate the venv first (`source .venv/bin/activate`), you can use `uvicorn` directly.
 
 The API will be live at `http://localhost:8000`. You can explore all endpoints interactively at `http://localhost:8000/docs`.
 

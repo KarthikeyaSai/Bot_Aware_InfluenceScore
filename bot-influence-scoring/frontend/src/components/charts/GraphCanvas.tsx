@@ -27,6 +27,9 @@ function nodeColor(botProb: number): string {
 
 export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
   const svgRef = useRef<SVGSVGElement>(null);
+  // Keep onNodeClick in a ref so it never causes the simulation to restart
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
 
   useEffect(() => {
     if (!svgRef.current || nodes.length === 0) return;
@@ -37,20 +40,24 @@ export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
     const { width, height } = svgRef.current.getBoundingClientRect();
 
     const g = svg.append('g');
-    svg.call(
-      d3.zoom<SVGSVGElement, unknown>()
-        .scaleExtent([0.1, 8])
-        .on('zoom', (e) => g.attr('transform', e.transform)),
-    );
 
+    // zoom is set up now but its handler is updated after node is created
+    // so the handler can access the node selection via closure
+    const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 8]);
+    svg.call(zoom);
+
+    // Copy both nodes and edges — d3 forceLink mutates edge objects in-place
+    // (replaces string source/target IDs with node references). Without a copy,
+    // those mutations persist into the next effect run and break link resolution.
     const nodesCopy = nodes.map((n) => ({ ...n }));
+    const edgesCopy = edges.map((e) => ({ ...e, source: e.source as string, target: e.target as string }));
 
     const simulation = d3
       .forceSimulation<GraphNode>(nodesCopy)
       .force(
         'link',
         d3
-          .forceLink<GraphNode, GraphEdge>(edges as GraphEdge[])
+          .forceLink<GraphNode, GraphEdge>(edgesCopy)
           .id((d) => d.id)
           .distance(60),
       )
@@ -60,10 +67,10 @@ export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
     const link = g
       .append('g')
       .selectAll<SVGLineElement, GraphEdge>('line')
-      .data(edges as GraphEdge[])
+      .data(edgesCopy)
       .join('line')
-      .attr('stroke', 'var(--border)')
-      .attr('stroke-width', (d) => Math.max(0.5, (d.weight ?? 1) * 3))
+      .attr('stroke', 'var(--graph-edge)')
+      .attr('stroke-width', 1)
       .attr('opacity', 0.5);
 
     const node = g
@@ -74,17 +81,19 @@ export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
       .attr('r', (d) => 5 + (d.influenceScore ?? 0) * 12)
       .attr('fill', (d) => nodeColor(d.botProb))
       .attr('cursor', 'pointer')
-      .on('click', (_, d) => onNodeClick?.(d))
-      .on('mouseover', function () {
+      .on('click', (_, d) => onNodeClickRef.current?.(d))
+      .on('mouseover', function (_, d) {
+        const k = d3.zoomTransform(svgRef.current!).k;
         d3.select(this)
           .transition().duration(100)
-          .attr('transform', 'scale(1.3)')
+          .attr('r', (5 + (d.influenceScore ?? 0) * 12) / k * 1.4)
           .style('filter', 'drop-shadow(0 0 8px currentColor)');
       })
-      .on('mouseout', function () {
+      .on('mouseout', function (_, d) {
+        const k = d3.zoomTransform(svgRef.current!).k;
         d3.select(this)
           .transition().duration(100)
-          .attr('transform', 'scale(1)')
+          .attr('r', (5 + (d.influenceScore ?? 0) * 12) / k)
           .style('filter', 'none');
       })
       .call(
@@ -100,6 +109,13 @@ export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
           }),
       );
 
+    // Now that node exists, attach the zoom handler with access to it
+    zoom.on('zoom', (e) => {
+      g.attr('transform', e.transform);
+      const k = e.transform.k;
+      node.attr('r', (d) => (5 + (d.influenceScore ?? 0) * 12) / k);
+    });
+
     simulation.on('tick', () => {
       link
         .attr('x1', (d) => (d.source as GraphNode).x ?? 0)
@@ -112,7 +128,7 @@ export function GraphCanvas({ nodes, edges, onNodeClick }: GraphCanvasProps) {
     });
 
     return () => { simulation.stop(); };
-  }, [nodes, edges, onNodeClick]);
+  }, [nodes, edges]); // onNodeClick intentionally excluded — handled via ref above
 
   return (
     <svg

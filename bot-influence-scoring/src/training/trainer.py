@@ -17,16 +17,19 @@ def get_class_weights(labels):
     
     return torch.tensor([w0, w1], dtype=torch.float)
 
-def train_model(model, data, epochs=200, lr=0.005, weight_decay=5e-4, device='cpu', model_path='models/gat_cresci2017.pt'):
+def train_model(model, data, epochs=200, lr=0.005, weight_decay=5e-4, device='cpu',
+                model_path='models/gat_cresci2017.pt', loss_weights=None, patience=50):
     model = model.to(device)
     data = data.to(device)
-    
-    weights = get_class_weights(data['user'].y[data['user'].train_mask]).to(device)
+
+    if loss_weights is not None:
+        weights = loss_weights.to(device)
+    else:
+        weights = get_class_weights(data['user'].y[data['user'].train_mask]).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    
+
     best_val_f1 = 0
-    patience = 50
     counter = 0
     
     os.makedirs(os.path.dirname(model_path), exist_ok=True)

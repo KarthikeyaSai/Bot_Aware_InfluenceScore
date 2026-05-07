@@ -4,45 +4,45 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv, HeteroConv
 
 class BotAwareGAT(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  in_channels: int,
                  hidden_channels: int = 128,
                  out_channels: int = 64,
                  num_heads: int = 8,
                  dropout: float = 0.6,
-                 edge_types: list = None):
+                 edge_types: list = None,
+                 add_self_loops: bool = True):
         """
         Heterogeneous GAT for bot detection.
+        add_self_loops=False is required for large dense graphs (e.g. MGTAB)
+        to avoid segfaults from GATConv's self-loop insertion on huge edge tensors.
         """
         super().__init__()
         self.dropout = dropout
 
-        # Layer 1: HeteroConv with GATConv per edge type
         self.conv1 = HeteroConv({
             edge_type: GATConv(
                 in_channels=in_channels,
                 out_channels=hidden_channels // num_heads,
                 heads=num_heads,
                 dropout=dropout,
-                add_self_loops=True
+                add_self_loops=add_self_loops,
             )
             for edge_type in edge_types
         }, aggr='mean')
 
-        # Layer 2
         self.conv2 = HeteroConv({
             edge_type: GATConv(
                 in_channels=hidden_channels,
                 out_channels=out_channels,
                 heads=num_heads,
                 dropout=dropout,
-                add_self_loops=True,
-                concat=False   # Average heads in final layer
+                add_self_loops=add_self_loops,
+                concat=False,
             )
             for edge_type in edge_types
         }, aggr='mean')
 
-        # Classification head
         self.classifier = nn.Sequential(
             nn.Linear(out_channels, 32),
             nn.ReLU(),

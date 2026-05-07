@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { BarChart2, Network, ArrowLeftRight, Upload, Settings, Sun, Moon } from 'lucide-react';
+import { Network, ArrowLeftRight, Upload, Settings, Sun, Moon, BarChart2 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { useTheme } from '../../hooks/useTheme';
 
 const navItems = [
   { icon: Network,        label: 'Graph Explorer',   to: '/'         },
-  { icon: BarChart2,      label: 'Leaderboard',      to: '/rankings' },
   { icon: ArrowLeftRight, label: 'Before / After',   to: '/compare'  },
+  { icon: BarChart2,      label: 'Model Metrics',    to: '/metrics'  },
   { icon: Upload,         label: 'Upload & Analyze', to: '/upload'   },
   { icon: Settings,       label: 'Settings',         to: '/settings' },
 ];
+
 
 function ThemeToggle({ compact }: { compact: boolean }) {
   const { theme, toggle } = useTheme();

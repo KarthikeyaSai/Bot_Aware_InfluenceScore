@@ -13,6 +13,7 @@
   --text-primary:   #e7e9ea;
   --text-secondary: #71767b;
   --text-disabled:  #3e4144;
+  --graph-edge:     #71767b;
 }
 
 :root[data-theme="light"] {
@@ -25,6 +26,7 @@
   --text-primary:   #0f1419;
   --text-secondary: #536471;
   --text-disabled:  #c4cfd6;
+  --graph-edge:     #536471;
 }
 
 /* Default: dark mode */
@@ -38,6 +40,7 @@
   --text-primary:   #e7e9ea;
   --text-secondary: #71767b;
   --text-disabled:  #3e4144;
+  --graph-edge:     #71767b;
 }
 
 @media (prefers-color-scheme: light) {
@@ -51,6 +54,7 @@
     --text-primary:   #0f1419;
     --text-secondary: #536471;
     --text-disabled:  #c4cfd6;
+    --graph-edge:     #536471;
   }
 }
 

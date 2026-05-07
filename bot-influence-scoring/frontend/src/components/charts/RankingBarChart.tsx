@@ -1,5 +1,5 @@
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Label,
 } from 'recharts';
 import { Card } from '../ui/Card';
 
@@ -29,14 +29,16 @@ export function RankingBarChart({ title, data, color }: RankingBarChartProps) {
     <Card>
       <p className="text-lg font-semibold text-text-primary mb-4">{title}</p>
       <ResponsiveContainer width="100%" height={420}>
-        <BarChart layout="vertical" data={data} margin={{ left: 80 }}>
+        <BarChart layout="vertical" data={data} margin={{ left: 80, right: 16, bottom: 20 }}>
           <XAxis
             type="number"
             domain={[0, 1]}
             tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
             axisLine={false}
             tickLine={false}
-          />
+          >
+            <Label value="Composite Influence Score (φᵥ)" position="insideBottom" offset={-4} style={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+          </XAxis>
           <YAxis
             type="category"
             dataKey="nodeId"
@@ -44,7 +46,9 @@ export function RankingBarChart({ title, data, color }: RankingBarChartProps) {
             tick={{ fill: 'var(--text-secondary)', fontSize: 11, fontFamily: 'JetBrains Mono' }}
             axisLine={false}
             tickLine={false}
-          />
+          >
+            <Label value="Node ID" angle={-90} position="insideLeft" offset={16} style={{ fill: 'var(--text-secondary)', fontSize: 11 }} />
+          </YAxis>
           <Tooltip content={<CustomTooltip />} cursor={{ fill: 'var(--bg-elevated)' }} />
           <Bar dataKey="score" radius={[0, 4, 4, 0]} fill={color} barSize={12} animationDuration={600} />
         </BarChart>

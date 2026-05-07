@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routers import scores, nodes
-from api.db.session import load_precomputed_data
+from api.routers import scores, nodes, comparison, metrics
+from api.db.session import load_precomputed_data, get_dataset_info
 
 app = FastAPI(
     title="Bot-Aware Influence Scoring API",
@@ -26,6 +26,12 @@ async def startup_event():
 async def root():
     return {"message": "Welcome to the Bot-Aware Influence Scoring API. Visit /docs for Swagger UI."}
 
+@app.get("/api/v1/datasets")
+async def list_datasets():
+    return get_dataset_info()
+
 # Include routers
 app.include_router(scores.router, prefix="/api/v1/scores", tags=["Scores"])
 app.include_router(nodes.router, prefix="/api/v1/nodes", tags=["Nodes"])
+app.include_router(comparison.router, prefix="/api/v1/comparison", tags=["Comparison"])
+app.include_router(metrics.router, prefix="/api/v1/metrics", tags=["Metrics"])

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { GraphEdge, GraphNode } from '../components/charts/GraphCanvas';
 
 const BASE = 'http://localhost:8000/api/v1';
+const DATASET = 'cresci-2017';
 
 interface ScoresResponse {
   nodes: GraphNode[];
@@ -13,7 +14,7 @@ export function useInfluenceScores({ sanitized, topK }: { sanitized: boolean; to
     queryKey: ['scores', sanitized, topK],
     queryFn: async () => {
       const graph = sanitized ? 'sanitized' : 'raw';
-      const res = await fetch(`${BASE}/scores/cresci-2017?top_k=${topK}&graph_type=${graph}`);
+      const res = await fetch(`${BASE}/scores/graph?top_k=${topK}&graph_type=${graph}&dataset=${DATASET}`);
       if (!res.ok) throw new Error('Failed to fetch scores');
       return res.json();
     },
@@ -68,10 +69,10 @@ export function useLeaderboard({ sanitized }: { sanitized: boolean }) {
     queryKey: ['leaderboard', sanitized],
     queryFn: async () => {
       const graph = sanitized ? 'sanitized' : 'raw';
-      const res = await fetch(`${BASE}/scores/cresci-2017?top_k=500&graph_type=${graph}`);
+      const res = await fetch(`${BASE}/scores/leaderboard?top_k=500&graph_type=${graph}&dataset=${DATASET}`);
       if (!res.ok) throw new Error('Failed to fetch leaderboard');
       const data = await res.json();
-      return data.rankings ?? [];
+      return data.rows ?? [];
     },
   });
 }
@@ -91,9 +92,10 @@ export function useRankingComparison() {
   return useQuery<ComparisonData>({
     queryKey: ['comparison'],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/comparison/cresci-2017`);
+      const res = await fetch(`${BASE}/comparison/${DATASET}`);
       if (!res.ok) throw new Error('Failed to fetch comparison');
       return res.json();
     },
   });
 }
+
