@@ -46,8 +46,10 @@ bot-influence-scoring/
 ├── api/
 │   ├── main.py            # FastAPI app entry point
 │   ├── routers/
-│   │   ├── scores.py      # GET /api/v1/scores — leaderboard endpoint
-│   │   └── nodes.py       # GET /api/v1/nodes/{id} — per-account detail
+│   │   ├── scores.py      # GET /api/v1/scores — graph + leaderboard endpoints
+│   │   ├── nodes.py       # GET /api/v1/nodes/{id} — per-account detail
+│   │   ├── comparison.py  # GET /api/v1/comparison/{dataset} — before/after stats
+│   │   └── metrics.py     # GET /api/v1/metrics/ — model evaluation metrics
 │   ├── db/
 │   │   └── session.py     # In-memory cache of precomputed scores
 │   └── schemas/           # Pydantic request/response models
@@ -111,6 +113,8 @@ pip install torch-geometric
 
 For CUDA (NVIDIA GPU), follow the [PyTorch install guide](https://pytorch.org/get-started/locally/) to pick the right wheel.
 
+> **macOS ARM warning:** Do **not** install `torch-sparse`. It segfaults on macOS ARM and corrupts the `torch-geometric` install. If you accidentally install it, run `pip uninstall torch-sparse -y` to restore PyG.
+
 ### 4. Install frontend dependencies
 
 ```bash
@@ -152,15 +156,15 @@ The dashboard will open at `http://localhost:5173`.
 
 ## What you'll see in the dashboard
 
-The sidebar on the left lets you navigate between six views:
+The sidebar on the left lets you navigate between five views:
 
 | View | What it shows |
 |---|---|
-| **Network Graph** | A live, interactive map of the social network. Green nodes are genuine users, red nodes are bots, orange are uncertain. Node size reflects influence score. Click any node to open an audit panel. |
-| **Leaderboard** | A sortable table of the top influencers with their composite score, PageRank, HITS authority, IC reach, and bot probability. Toggle between raw and sanitized rankings. Export to CSV. |
+| **Graph Explorer** | A live, interactive force-directed map of the social network. Green nodes are genuine users, orange nodes are bots. Node size reflects influence score and scales with zoom. Click any node to open an audit panel. |
 | **Before / After** | Side-by-side bar charts showing the top 20 influencers in the raw graph vs. the sanitized graph. Summary stats (Kendall's τ, Spearman ρ) quantify how much bot removal reshuffled the rankings. |
-| **Upload & Analyze** | Drag-and-drop your own edge list (CSV) and node features (JSON) to run the full pipeline on custom data. A live progress bar tracks each pipeline stage via WebSocket. |
-| **Settings** | Adjust the bot threshold τ, edge weight decay α, and the β₁/β₂/β₃ weights that blend PageRank, HITS, and IC reach into the composite score. |
+| **Model Metrics** | Evaluation dashboard for the trained GAT: summary cards (Accuracy, F1, ROC-AUC, PR-AUC), 2×2 confusion matrix, ROC curve, PR curve, score distribution chart, and a feature importance bar chart. |
+| **Upload & Analyze** | Placeholder for custom graph upload (not yet implemented). |
+| **Settings** | Placeholder for threshold and weight configuration (not yet implemented). |
 
 ---
 
@@ -199,20 +203,20 @@ PYTHONPATH=. python notebooks/06_baselines.py
 Once the backend is running, these are the main endpoints:
 
 ```
-GET  /api/v1/scores/cresci-2017?top_k=100&graph_type=raw
-     → Top-K influencers from the raw or sanitized graph
+GET  /api/v1/scores/graph?top_k=100&graph_type=raw&dataset=cresci-2017
+     → Graph nodes + edges for the network visualisation
+
+GET  /api/v1/scores/leaderboard?top_k=500&graph_type=sanitized&dataset=cresci-2017
+     → Top-K influencers with composite scores, PageRank, HITS, IC reach
 
 GET  /api/v1/nodes/{node_idx}/bot-probability
      → Bot probability + feature breakdown for a single account
 
 GET  /api/v1/comparison/cresci-2017
-     → Before/after ranking displacement statistics
+     → Before/after ranking displacement statistics (Kendall τ, Spearman ρ)
 
-POST /api/v1/analyze
-     → Submit a custom graph (CSV edges + JSON nodes) for analysis
-
-WS   /api/v1/ws/jobs/{job_id}
-     → WebSocket stream of real-time pipeline progress
+GET  /api/v1/metrics/?dataset=cresci-2017
+     → Model evaluation: confusion matrix, ROC, PR curve, feature importance
 ```
 
 Full interactive docs: `http://localhost:8000/docs`
