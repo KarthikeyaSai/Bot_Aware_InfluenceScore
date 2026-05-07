@@ -35,6 +35,18 @@ def build_node_features(users_df: pd.DataFrame, tweets_df: pd.DataFrame = None) 
         users_df['location'].notna().astype(int) +
         users_df['url'].notna().astype(int)
     )
+    
+    # Binary flags
+    features['default_profile'] = users_df['default_profile'].fillna(0).astype(int)
+    features['default_profile_image'] = users_df['default_profile_image'].fillna(0).astype(int)
+    features['geo_enabled'] = users_df['geo_enabled'].fillna(0).astype(int)
+    features['verified'] = users_df['verified'].fillna(0).astype(int)
+    features['protected'] = users_df['protected'].fillna(0).astype(int)
+
+    # Text length features
+    features['name_len'] = users_df['name'].str.len().fillna(0)
+    features['screen_name_len'] = users_df['screen_name'].str.len().fillna(0)
+    features['description_len'] = users_df['description'].str.len().fillna(0)
 
     # 2. Behavioral features (if tweets_df is provided)
     if tweets_df is not None:

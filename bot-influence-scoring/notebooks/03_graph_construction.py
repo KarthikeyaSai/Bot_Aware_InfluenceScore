@@ -66,6 +66,8 @@ def main():
     
     # Create mapping from user_id to index
     user_id_to_idx = {uid: i for i, uid in enumerate(users_df['id'])}
+    # Create mapping from screen_name to index
+    screen_name_to_idx = {str(sn).lower(): i for i, sn in enumerate(users_df['screen_name'])}
     
     print(f"Building node features for {len(users_df)} users...")
     X, scaler = build_node_features(users_df, tweets_df)
@@ -75,22 +77,69 @@ def main():
     edge_dfs = {}
     
     if not tweets_df.empty:
-        # 1. Mentions/Replies edges
-        # Filter for tweets that are replies to users we have in our users_df
-        mentions = tweets_df[
+        # 1. Mentions/Replies edges from explicit columns
+        mentions_col = tweets_df[
             tweets_df['in_reply_to_user_id'].notna() & 
             (tweets_df['in_reply_to_user_id'] != 0) &
             tweets_df['user_id'].isin(user_id_to_idx) &
             tweets_df['in_reply_to_user_id'].isin(user_id_to_idx)
         ].copy()
         
-        if not mentions.empty:
-            mentions['source_idx'] = mentions['user_id'].map(user_id_to_idx)
-            mentions['target_idx'] = mentions['in_reply_to_user_id'].map(user_id_to_idx)
-            mentions['timestamp'] = pd.to_datetime(mentions['timestamp'])
+        # 2. Extract mentions from text
+        import re
+        mention_pattern = re.compile(r'@(\w+)')
+        
+        text_mentions = []
+        # To avoid extreme slowness, only process rows with @ or RT
+        tweets_with_mentions = tweets_df[tweets_df['text'].str.contains('@', na=False)].copy()
+        print(f"Parsing {len(tweets_with_mentions)} tweets for text-based mentions...")
+        
+        for _, row in tweets_with_mentions.iterrows():
+            source_id = row['user_id']
+            if source_id not in user_id_to_idx:
+                continue
             
-            print(f"Found {len(mentions)} raw mention interactions.")
-            edge_dfs['mentions'] = compute_edge_weights(mentions)
+            text = str(row['text'])
+            found_mentions = mention_pattern.findall(text)
+            
+            for sn in found_mentions:
+                sn_lower = sn.lower()
+                if sn_lower in screen_name_to_idx:
+                    text_mentions.append({
+                        'user_id': source_id,
+                        'target_user_id': users_df.iloc[screen_name_to_idx[sn_lower]]['id'],
+                        'timestamp': row['timestamp'],
+                        'is_retweet': text.startswith('RT @')
+                    })
+        
+        text_mentions_df = pd.DataFrame(text_mentions)
+        
+        all_mentions = []
+        if not mentions_col.empty:
+            all_mentions.append(mentions_col[['user_id', 'in_reply_to_user_id', 'timestamp']].rename(
+                columns={'in_reply_to_user_id': 'target_user_id'}))
+        
+        if not text_mentions_df.empty:
+            # Separate retweets and mentions
+            retweets_df = text_mentions_df[text_mentions_df['is_retweet']].copy()
+            mentions_only_df = text_mentions_df[~text_mentions_df['is_retweet']].copy()
+            
+            if not mentions_only_df.empty:
+                all_mentions.append(mentions_only_df[['user_id', 'target_user_id', 'timestamp']])
+            
+            if not retweets_df.empty:
+                retweets_df['source_idx'] = retweets_df['user_id'].map(user_id_to_idx)
+                retweets_df['target_idx'] = retweets_df['target_user_id'].map(user_id_to_idx)
+                retweets_df['timestamp'] = pd.to_datetime(retweets_df['timestamp'], errors='coerce')
+                edge_dfs['retweets'] = compute_edge_weights(retweets_df.dropna(subset=['timestamp']))
+                print(f"Computed {len(edge_dfs['retweets'])} weighted retweet edges.")
+
+        if all_mentions:
+            final_mentions_df = pd.concat(all_mentions)
+            final_mentions_df['source_idx'] = final_mentions_df['user_id'].map(user_id_to_idx)
+            final_mentions_df['target_idx'] = final_mentions_df['target_user_id'].map(user_id_to_idx)
+            final_mentions_df['timestamp'] = pd.to_datetime(final_mentions_df['timestamp'], errors='coerce')
+            edge_dfs['mentions'] = compute_edge_weights(final_mentions_df.dropna(subset=['timestamp']))
             print(f"Computed {len(edge_dfs['mentions'])} weighted mention edges.")
 
     # Followers edges - Cresci-2017 often doesn't provide them in CSV. 
