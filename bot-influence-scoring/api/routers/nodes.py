@@ -1,3 +1,4 @@
+import numpy as np
 from fastapi import APIRouter, HTTPException
 from api.db.session import get_influence_df, get_bot_probs, get_edges
 from api.schemas.pydantic_models import NodeDetailsResponse, BotProbabilityResponse
@@ -60,14 +61,13 @@ async def get_bot_probability(node_idx: int):
     ]
 
     suspicious_neighbors = []
-    if raw_edges:
-        neighbor_ids = set()
-        for src, dst, _ in raw_edges:
-            if src == node_idx:
-                neighbor_ids.add(dst)
-            elif dst == node_idx:
-                neighbor_ids.add(src)
-        for nid in list(neighbor_ids)[:10]:
+    if raw_edges is not None:
+        src_arr, dst_arr, _ = raw_edges
+        mask = (src_arr == node_idx) | (dst_arr == node_idx)
+        neighbor_ids = np.union1d(dst_arr[mask & (src_arr == node_idx)],
+                                  src_arr[mask & (dst_arr == node_idx)])
+        for nid in neighbor_ids[:10]:
+            nid = int(nid)
             if 0 <= nid < len(probs) and probs[nid] >= 0.5:
                 suspicious_neighbors.append({"id": str(nid), "botProb": float(probs[nid])})
 

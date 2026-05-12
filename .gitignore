@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Don't ignore frontend lib directory (rule above is for Python packaging only)
+!bot-influence-scoring/frontend/src/lib/
 parts/
 sdist/
 var/
@@ -156,10 +158,13 @@ cython_debug/
 
 # Data & Large Files
 *.zip
-bot-influence-scoring/data/
+bot-influence-scoring/data/cresci-2017/raw/
 bot-influence-scoring/models/*.pt
 bot-influence-scoring/models/*.joblib
 !bot-influence-scoring/models/.gitkeep
+
+# Allow precomputed artifacts needed to run without re-training
+!bot-influence-scoring/models/gat_cresci2017.pt
 
 
 # Environments

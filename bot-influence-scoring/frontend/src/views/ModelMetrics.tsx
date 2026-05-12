@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Legend, Label, ReferenceLine,
+  BarChart, Bar, Legend, Label, ReferenceLine, CartesianGrid,
+  AreaChart, Area,
 } from 'recharts';
 import { Card } from '../components/ui/Card';
 
@@ -14,6 +15,17 @@ function useMetrics() {
       const res = await fetch(`${BASE}/metrics/?dataset=cresci-2017`);
       if (!res.ok) throw new Error('Failed to fetch metrics');
       return res.json();
+    },
+  });
+}
+
+function useTimeline() {
+  return useQuery({
+    queryKey: ['metrics-timeline'],
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/metrics/timeline`);
+      if (!res.ok) throw new Error('Failed to fetch timeline');
+      return res.json() as Promise<{ month: string; genuine: number; bots: number }[]>;
     },
   });
 }
@@ -55,6 +67,65 @@ function ConfusionMatrix({ tn, fp, fn, tp }: { tn: number; fp: number; fn: numbe
 }
 
 const chartTextStyle = { fill: 'var(--text-secondary)', fontSize: 11 };
+
+function AccountTimeline() {
+  const { data, isLoading } = useTimeline();
+
+  if (isLoading || !data) return (
+    <Card><p className="text-sm text-text-secondary">Loading timeline…</p></Card>
+  );
+
+  // Show one tick label every 12 months to avoid crowding
+  const tickFormatter = (month: string, idx: number) =>
+    idx % 12 === 0 ? month.slice(0, 7) : '';
+
+  return (
+    <Card>
+      <p className="text-base font-semibold text-text-primary mb-1">
+        Account Creation Timeline
+      </p>
+      <p className="text-xs text-text-secondary mb-4">
+        Monthly new account registrations — genuine vs. bot (Cresci-2017, 2007–2015).
+        Bot campaigns appear as sudden spikes; genuine users grow organically.
+      </p>
+      <ResponsiveContainer width="100%" height={280}>
+        <AreaChart data={data} margin={{ left: 8, right: 16, bottom: 28, top: 8 }}>
+          <defs>
+            <linearGradient id="colGenuine" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#00ba7c" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#00ba7c" stopOpacity={0.05} />
+            </linearGradient>
+            <linearGradient id="colBot" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#f4212e" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#f4212e" stopOpacity={0.05} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+          <XAxis
+            dataKey="month"
+            tick={chartTextStyle}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={tickFormatter}
+            interval={0}
+          >
+            <Label value="Month" position="insideBottom" offset={-16} style={chartTextStyle} />
+          </XAxis>
+          <YAxis tick={chartTextStyle} axisLine={false} tickLine={false}>
+            <Label value="New Accounts" angle={-90} position="insideLeft" offset={16} style={chartTextStyle} />
+          </YAxis>
+          <Tooltip
+            contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+            labelFormatter={(l) => `Month: ${l}`}
+          />
+          <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 12 }} />
+          <Area type="monotone" dataKey="genuine" name="Genuine" stroke="#00ba7c" fill="url(#colGenuine)" strokeWidth={2} dot={false} />
+          <Area type="monotone" dataKey="bots"    name="Bots"    stroke="#f4212e" fill="url(#colBot)"     strokeWidth={2} dot={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </Card>
+  );
+}
 
 export function ModelMetrics() {
   const { data, isLoading } = useMetrics();
@@ -135,7 +206,7 @@ export function ModelMetrics() {
               </YAxis>
               <Tooltip
                 contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                formatter={(v: number) => v.toFixed(3)}
+                formatter={(v: unknown) => (v as number).toFixed(3)}
               />
               <ReferenceLine stroke="var(--border)" segment={[{ x: 0, y: 0 }, { x: 1, y: 1 }]} strokeDasharray="4 4" />
               <Line dataKey="tpr" stroke="#1d9bf0" dot={false} strokeWidth={2} name="TPR" />
@@ -156,13 +227,16 @@ export function ModelMetrics() {
               </YAxis>
               <Tooltip
                 contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                formatter={(v: number) => v.toFixed(3)}
+                formatter={(v: unknown) => (v as number).toFixed(3)}
               />
               <Line dataKey="precision" stroke="#7856ff" dot={false} strokeWidth={2} name="Precision" />
             </LineChart>
           </ResponsiveContainer>
         </Card>
       </div>
+
+      {/* Account creation timeline */}
+      <AccountTimeline />
 
       {/* Feature importance */}
       <Card>
@@ -180,9 +254,10 @@ export function ModelMetrics() {
             <YAxis type="category" dataKey="feature" width={156} tick={chartTextStyle} axisLine={false} tickLine={false} />
             <Tooltip
               contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-              formatter={(v: number, _: string, p: { payload: { direction: string } }) => [
-                v.toFixed(4), p.payload.direction === 'bot' ? 'Correlates → Bot' : 'Correlates → Genuine'
-              ]}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter={(v: any, _: any, p: any) => [
+                (v as number).toFixed(4), p.payload.direction === 'bot' ? 'Correlates → Bot' : 'Correlates → Genuine'
+              ] as any}
             />
             <Bar
               dataKey="correlation"

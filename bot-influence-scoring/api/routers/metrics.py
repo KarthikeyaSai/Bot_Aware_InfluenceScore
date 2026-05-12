@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import os
+import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from sklearn.metrics import roc_curve, precision_recall_curve, auc
 
@@ -116,3 +117,56 @@ async def get_metrics(dataset: str = Query("cresci-2017")):
         "scoreDist": score_dist,
         "featureImportance": importances,
     }
+
+
+# Raw data folders: each subfolder has users.csv
+_CRESCI_SOURCES = {
+    "genuine": ("data/cresci-2017/raw/genuine_accounts.csv/users.csv", 0),
+    "fake_followers":       ("data/cresci-2017/raw/fake_followers.csv/users.csv", 1),
+    "social_spambots_1":    ("data/cresci-2017/raw/social_spambots_1.csv/users.csv", 1),
+    "social_spambots_2":    ("data/cresci-2017/raw/social_spambots_2.csv/users.csv", 1),
+    "social_spambots_3":    ("data/cresci-2017/raw/social_spambots_3.csv/users.csv", 1),
+    "traditional_spambots_1": ("data/cresci-2017/raw/traditional_spambots_1.csv/users.csv", 1),
+    "traditional_spambots_2": ("data/cresci-2017/raw/traditional_spambots_2.csv/users.csv", 1),
+    "traditional_spambots_3": ("data/cresci-2017/raw/traditional_spambots_3.csv/users.csv", 1),
+    "traditional_spambots_4": ("data/cresci-2017/raw/traditional_spambots_4.csv/users.csv", 1),
+}
+
+_timeline_cache: list | None = None
+
+
+@router.get("/timeline")
+async def get_timeline():
+    global _timeline_cache
+    if _timeline_cache is not None:
+        return _timeline_cache
+
+    frames = []
+    for path, label in _CRESCI_SOURCES.values():
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path, usecols=["created_at"])
+        df["label"] = label
+        frames.append(df)
+
+    if not frames:
+        raise HTTPException(status_code=503, detail="Raw Cresci-2017 data not found.")
+
+    all_df = pd.concat(frames, ignore_index=True)
+    all_df["created_at"] = pd.to_datetime(all_df["created_at"], format="mixed", utc=True, errors="coerce")
+    all_df["month"] = all_df["created_at"].dt.to_period("M").astype(str)
+
+    grouped = all_df.groupby(["month", "label"]).size().unstack(fill_value=0).reset_index()
+    grouped.columns.name = None
+    if 0 not in grouped.columns:
+        grouped[0] = 0
+    if 1 not in grouped.columns:
+        grouped[1] = 0
+    grouped = grouped.sort_values("month")
+
+    result = [
+        {"month": row["month"], "genuine": int(row[0]), "bots": int(row[1])}
+        for _, row in grouped.iterrows()
+    ]
+    _timeline_cache = result
+    return result

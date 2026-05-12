@@ -2,11 +2,12 @@ import pandas as pd
 import numpy as np
 import torch
 import os
+import networkx as nx
 
 # Per-dataset cache
 DATASETS: dict[str, dict] = {
-    "cresci-2017": {"influence_df": None, "bot_probs": None, "edges": None, "loaded": False},
-    "mgtab":       {"influence_df": None, "bot_probs": None, "edges": None, "loaded": False},
+    "cresci-2017": {"influence_df": None, "bot_probs": None, "edges": None, "raw_pagerank": None, "loaded": False},
+    "mgtab":       {"influence_df": None, "bot_probs": None, "edges": None, "raw_pagerank": None, "loaded": False},
 }
 
 DATASET_PATHS = {
@@ -62,6 +63,35 @@ def load_dataset(name: str):
         cache["edges"] = (src, dst, w)
         print(f"[{name}] Loaded {len(src):,} edges")
 
+        # Build full graph (all nodes including bots) and compute raw PageRank
+        G_raw = nx.DiGraph()
+        for s, d, wt in zip(src.tolist(), dst.tolist(), w.tolist()):
+            G_raw.add_edge(int(s), int(d), weight=float(wt))
+        raw_pr = nx.pagerank(G_raw, alpha=0.85, weight='weight', max_iter=200)
+
+        # Build sanitized graph (genuine nodes only) and compute clean PageRank
+        bot_probs_arr = cache.get("bot_probs")
+        if bot_probs_arr is not None:
+            genuine_set = set(int(i) for i in range(len(bot_probs_arr)) if bot_probs_arr[i] < 0.5)
+        else:
+            genuine_set = set(G_raw.nodes())
+        G_clean = nx.DiGraph()
+        for s, d, wt in zip(src.tolist(), dst.tolist(), w.tolist()):
+            s, d = int(s), int(d)
+            if s in genuine_set and d in genuine_set:
+                G_clean.add_edge(s, d, weight=float(wt))
+        clean_pr = nx.pagerank(G_clean, alpha=0.85, weight='weight', max_iter=200)
+
+        def _minmax_norm(pr_dict):
+            vals = np.array(list(pr_dict.values()))
+            lo, hi = vals.min(), vals.max()
+            return {n: float((v - lo) / (hi - lo + 1e-12)) for n, v in pr_dict.items()}
+
+        cache["raw_pagerank"]   = _minmax_norm(raw_pr)
+        cache["clean_pagerank"] = _minmax_norm(clean_pr)
+        print(f"[{name}] PageRank: raw={G_raw.number_of_nodes():,} nodes, "
+              f"sanitized={G_clean.number_of_nodes():,} nodes")
+
     cache["loaded"] = True
 
 
@@ -78,6 +108,12 @@ def get_bot_probs(dataset: str = "cresci-2017"):
 
 def get_edges(dataset: str = "cresci-2017"):
     return DATASETS.get(dataset, {}).get("edges")
+
+def get_raw_pagerank(dataset: str = "cresci-2017"):
+    return DATASETS.get(dataset, {}).get("raw_pagerank")
+
+def get_clean_pagerank(dataset: str = "cresci-2017"):
+    return DATASETS.get(dataset, {}).get("clean_pagerank")
 
 def get_dataset_info():
     info = []
